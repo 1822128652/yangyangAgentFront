@@ -6,6 +6,7 @@ import DoctorDashboard from '@/views/doctor/DoctorDashboard.vue'
 import ScheduleView from '@/views/doctor/Components/ScheduleView.vue'
 import AppointmentView from '@/views/doctor/Components/AppointmentView.vue'
 import SettingsView from '@/views/doctor/Components/SettingsView.vue'
+import ScheduleCalendar from '@/views/doctor/Components/ScheduleCalendar.vue' // 10.27 新增
 
 const routes = [
   { path: '/', component: ChatWindow },
@@ -14,9 +15,10 @@ const routes = [
     path: '/doctor/dashboard',
     component: DoctorDashboard,
     children: [
-      { path: '', redirect: '/doctor/dashboard/schedule' },
+      { path: '', redirect: '/doctor/dashboard/calendar' },
       { path: 'schedule', component: ScheduleView },
       { path: 'appointments', component: AppointmentView },
+      { path: 'calendar', component: ScheduleCalendar }, // 10.29 新增
       { path: 'settings', component: SettingsView }
     ]
   }

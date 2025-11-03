@@ -1,12 +1,43 @@
 <template>
   <div>
-    <h3>⚙️ 个人设置</h3>
-
     <el-card style="max-width: 500px; margin-top: 20px;">
-      <el-descriptions title="医生信息" column="1" border>
+      <!-- 头像展示区域 -->
+      <div style="text-align: center; margin-bottom: 20px;">
+        <el-avatar :size="100" class="avatar">
+          <img 
+            :src="doctor.avatar" 
+            alt="医生头像" 
+            style="width: 100%; height: 100%; object-fit: cover;"
+            v-if="doctor.avatar"
+          >
+          <span v-else style="font-size: 30px;">
+            {{ doctor.realName ? doctor.realName.charAt(0) : '医' }}
+          </span>
+        </el-avatar>
+        <el-button 
+          type="text"  
+          @click="handleAvatarUpload" 
+          style="margin-top: 10px; color: #409eff;"
+        >
+          更换头像
+        </el-button>
+        <input 
+          type="file" 
+          ref="fileInput" 
+          accept="image/*" 
+          @change="uploadAvatar" 
+          style="display: none;"
+        >
+      </div>
+
+      <!-- 医生信息展示 -->
+      <el-descriptions title="医生信息" :column="1" border>
         <el-descriptions-item label="用户名">{{ doctor.username }}</el-descriptions-item>
         <el-descriptions-item label="姓名">{{ doctor.realName }}</el-descriptions-item>
         <el-descriptions-item label="科室">{{ doctor.department }}</el-descriptions-item>
+        <el-descriptions-item label="入职时间">
+          {{ formatDateTime(doctor.createTime) }}
+        </el-descriptions-item>
       </el-descriptions>
 
       <div style="margin-top: 20px; display: flex; gap: 10px;">
@@ -53,36 +84,116 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, onMounted, reactive } from 'vue'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import request from '@/utils/request'
 import router from '@/router'
 
-const doctor = ref({
-  username: '',
-  realName: '',
-  department: ''
+// 医生信息响应式对象（字段与后端返回保持一致）
+const doctor = reactive({
+  id: '',
+  username: '',       // 后端返回的username（原account）
+  realName: '',       // 后端返回的realName（姓名）
+  department: '',
+  avatar: '',
+  createTime: ''
 })
 
+// 弹窗控制变量
 const usernameDialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
+
+// 表单数据
 const newUsername = ref('')
 const oldPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
+const fileInput = ref(null)
 
-// 获取医生信息
+// 初始化获取医生信息
+onMounted(() => {
+  const doctorStr = localStorage.getItem('doctor')
+  if (!doctorStr) {
+    router.push('/doctor/login')
+    return
+  }
+  fetchDoctorInfo()
+})
+
+// 获取医生信息（适配后端字段）
 const fetchDoctorInfo = async () => {
   try {
     const res = await request.get('/doctor/info')
     if (res.code === 200 && res.data) {
-      doctor.value = res.data
+      // 后端返回字段：id, username, realName, department
+      Object.assign(doctor, res.data)
+      // 如果后端返回头像和创建时间，这里会自动接收
     } else {
       ElMessage.error(res.msg || '获取信息失败')
     }
   } catch (err) {
     console.error('获取医生信息失败:', err)
-    ElMessage.error('加载失败')
+    ElMessage.error('加载失败，请刷新页面重试')
+  }
+}
+
+// 格式化日期时间
+const formatDateTime = (dateTime) => {
+  if (!dateTime) return ''
+  const formatted = dateTime.replace('T', ' ')
+  return formatted.substring(0, 19)
+}
+
+// 打开文件选择器
+const handleAvatarUpload = () => {
+  fileInput.value.click()
+}
+
+// 上传头像并更新
+const uploadAvatar = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    return ElMessage.error('请选择图片文件（支持jpg、png等格式）')
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return ElMessage.error('图片大小不能超过5MB')
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  const loading = ElLoading.service({ text: '头像上传中...' })
+  
+  try {
+    // 1. 上传图片到OSS
+    const uploadRes = await request.post('/yangyang/upload/photo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    
+    if (uploadRes.code === 200 && uploadRes.data) {
+      const avatarUrl = uploadRes.data
+      // 2. 调用后端接口更新头像
+      const updateRes = await request.put('/doctor/updateAvatar', null, {
+        params: { avatarUrl }
+      })
+      
+      if (updateRes.code === 200) {
+        doctor.avatar = avatarUrl // 更新前端显示
+        ElMessage.success('头像更新成功')
+      } else {
+        ElMessage.error(updateRes.msg || '更新头像失败')
+      }
+    } else {
+      ElMessage.error(uploadRes.msg || '上传图片失败')
+    }
+  } catch (err) {
+    console.error('头像操作失败:', err)
+    ElMessage.error('操作失败，请重试')
+  } finally {
+    loading.close()
+    e.target.value = ''
   }
 }
 
@@ -92,16 +203,17 @@ const openEditUsername = () => {
   usernameDialogVisible.value = true
 }
 
-// 更新用户名
+// 更新用户名（适配后端参数格式）
 const updateUsername = async () => {
   if (!newUsername.value.trim()) {
     return ElMessage.warning('请输入新用户名')
   }
-  if (newUsername.value === doctor.value.username) {
+  if (newUsername.value === doctor.username) {
     return ElMessage.warning('新用户名不能与原用户名相同')
   }
 
   try {
+    // 后端需要的参数是username（对应UpdateUsernameRequest）
     const res = await request.put('/doctor/updateUsername', {
       username: newUsername.value
     })
@@ -114,7 +226,7 @@ const updateUsername = async () => {
     }
   } catch (err) {
     console.error('修改用户名失败:', err)
-    ElMessage.error('请求失败')
+    ElMessage.error('请求失败，请重试')
   }
 }
 
@@ -126,7 +238,7 @@ const openChangePassword = () => {
   passwordDialogVisible.value = true
 }
 
-// 修改密码
+// 修改密码（适配后端参数格式）
 const changePassword = async () => {
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
     return ElMessage.warning('请填写完整信息')
@@ -134,11 +246,15 @@ const changePassword = async () => {
   if (newPassword.value === oldPassword.value) {
     return ElMessage.warning('新密码不能与原密码相同')
   }
+  if (newPassword.value.length < 6) {
+    return ElMessage.warning('密码不能少于6位')
+  }
   if (newPassword.value !== confirmPassword.value) {
     return ElMessage.warning('两次输入的新密码不一致')
   }
 
   try {
+    // 后端需要的参数是oldPassword和newPassword（对应ChangePasswordRequest）
     const res = await request.put('/doctor/changePassword', {
       oldPassword: oldPassword.value,
       newPassword: newPassword.value
@@ -152,28 +268,47 @@ const changePassword = async () => {
     }
   } catch (err) {
     console.error('修改密码失败:', err)
-    ElMessage.error('请求失败')
+    ElMessage.error('请求失败，请重试')
   }
 }
 
-// 退出登录（修改用户名或密码后）
+// 退出登录
 const logout = () => {
   ElMessageBox.alert('请重新登录以继续操作', '提示', {
     confirmButtonText: '确定',
     callback: () => {
       localStorage.removeItem('doctor')
+      localStorage.removeItem('doctor_token')
+      localStorage.removeItem('doctor_info')
       router.push('/doctor/login')
     }
   })
 }
-
-onMounted(() => {
-  fetchDoctorInfo()
-})
 </script>
 
 <style scoped>
 .el-descriptions {
   margin-top: 10px;
+}
+
+.avatar {
+  border: 2px solid #f0f0f0;
+  transition: transform 0.3s ease;
+}
+
+.avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 768px) {
+  .el-card {
+    max-width: 100%;
+    margin: 10px;
+  }
+  
+  .el-descriptions {
+    font-size: 14px;
+  }
 }
 </style>

@@ -1,7 +1,5 @@
 <template>
   <div>
-    <h3>📋 挂号记录查询</h3>
-
     <!-- 查询条件 -->
     <el-form :inline="true" :model="filters" style="margin: 10px 0;">
       <el-form-item label="医生姓名">

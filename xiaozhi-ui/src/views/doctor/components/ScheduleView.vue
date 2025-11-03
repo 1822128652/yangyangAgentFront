@@ -1,7 +1,5 @@
 <template>
   <div>
-    <h3>📅 排班</h3>
-
     <!-- 操作按钮 -->
     <el-button type="primary" @click="openDialog">新增排班</el-button>
 
@@ -25,10 +23,22 @@
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑排班' : '新增排班'">
       <el-form :model="form" label-width="80px">
         <el-form-item label="科室">
-          <el-input v-model="form.department" placeholder="请输入科室" />
+          <!-- 科室设置为只读，新增时自动填充且不可修改 -->
+          <el-input 
+            v-model="form.department" 
+            placeholder="请输入科室" 
+            :disabled="true"
+            :readonly="true"
+          />
         </el-form-item>
         <el-form-item label="医生">
-          <el-input v-model="form.doctorName" placeholder="请输入医生姓名" />
+          <!-- 医生姓名设置为只读，新增时自动填充且不可修改 -->
+          <el-input 
+            v-model="form.doctorName" 
+            placeholder="请输入医生姓名" 
+            :disabled="true"
+            :readonly="true"
+          />
         </el-form-item>
         <el-form-item label="日期">
           <el-date-picker v-model="form.date" type="date" placeholder="请选择日期" />
@@ -59,6 +69,11 @@ import request from '@/utils/request'
 const scheduleList = ref([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+// 存储当前医生信息
+const currentDoctor = reactive({
+  department: '',
+  realName: ''
+})
 
 const form = reactive({
   id: null,
@@ -70,12 +85,33 @@ const form = reactive({
   remaining: 1
 })
 
-// 加载排班数据 - 修正：直接使用响应数据
+// 初始化时获取医生信息和排班数据
+onMounted(async () => {
+  await getDoctorInfo() // 先获取医生信息
+  await loadSchedule()  // 再加载排班数据
+})
+
+// 获取当前医生信息（用于自动填充科室和姓名）
+const getDoctorInfo = async () => {
+  try {
+    const res = await request.get('/doctor/info')
+    if (res.code === 200 && res.data) {
+      currentDoctor.department = res.data.department || ''
+      currentDoctor.realName = res.data.realName || ''
+    } else {
+      ElMessage.warning('获取医生信息失败，无法自动填充科室和姓名')
+    }
+  } catch (error) {
+    console.error('获取医生信息失败:', error)
+    ElMessage.error('获取医生信息失败')
+  }
+}
+
+// 加载排班数据
 const loadSchedule = async () => {
   try {
     const res = await request.get('/doctor/schedule')
     console.log('排班数据响应:', res)
-    // 直接使用 res，因为后端返回的就是数组
     if (Array.isArray(res)) {
       scheduleList.value = res
     } else {
@@ -88,13 +124,14 @@ const loadSchedule = async () => {
   }
 }
 
-// 打开新增排班
+// 打开新增排班弹窗（自动填充科室和医生姓名）
 const openDialog = () => {
   isEdit.value = false
   Object.assign(form, { 
     id: null, 
-    department: '', 
-    doctorName: '', 
+    // 自动填充科室和医生姓名
+    department: currentDoctor.department,
+    doctorName: currentDoctor.realName,
     date: '', 
     time: '', 
     total: 1, 
@@ -103,7 +140,7 @@ const openDialog = () => {
   dialogVisible.value = true
 }
 
-// 编辑排班
+// 编辑排班（保持原有科室和医生姓名，仍不可修改）
 const editSchedule = (row) => {
   isEdit.value = true
   Object.assign(form, row)
@@ -126,7 +163,6 @@ const saveSchedule = async () => {
       res = await request.post('/doctor/schedule', formattedForm)
     }
 
-    // 检查响应结果 - 修正：直接判断是否成功
     if (res) {
       dialogVisible.value = false
       await loadSchedule()
@@ -143,15 +179,11 @@ const saveSchedule = async () => {
 // 日期格式化函数
 const formatDate = (date) => {
   if (!date) return ''
-
-  // 如果是字符串直接返回
   if (typeof date === 'string') return date
-
-  // 如果是 Date 对象，格式化为 yyyy-MM-dd
+  
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-
   return `${year}-${month}-${day}`
 }
 
@@ -169,7 +201,6 @@ const confirmDelete = (id) => {
     .then(async () => {
       try {
         const res = await request.delete(`/doctor/schedule/${id}`)
-        // 修正：直接判断是否成功
         if (res !== undefined) {
           ElMessage.success('删除成功')
           loadSchedule()
@@ -185,8 +216,4 @@ const confirmDelete = (id) => {
       ElMessage.info('已取消删除')
     })
 }
-
-onMounted(() => {
-  loadSchedule()
-})
 </script>
