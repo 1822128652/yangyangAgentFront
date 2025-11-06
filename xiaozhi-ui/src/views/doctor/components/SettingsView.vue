@@ -15,7 +15,7 @@
           </span>
         </el-avatar>
         <el-button 
-          type="text"  
+          link 
           @click="handleAvatarUpload" 
           style="margin-top: 10px; color: #409eff;"
         >

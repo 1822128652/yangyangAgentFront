@@ -30,6 +30,7 @@ import { reactive, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
 import request from '@/utils/request'
+import { doctorWebSocket } from '@/utils/websocket'
 
 const router = useRouter()
 const route = useRoute()
@@ -55,10 +56,16 @@ const handleLogin = async () => {
     if (res.code === 200) {
       ElMessage.success('登录成功')
       // 存储 token + 医生信息
-      localStorage.setItem('doctor', JSON.stringify({
+      const doctorInfo = {
         ...res.data.doctor,
         token: res.data.token
-      }))
+      }
+      localStorage.setItem('doctor', JSON.stringify(doctorInfo))
+      
+      // 登录成功后立即连接 WebSocket
+      console.log('登录成功，连接 WebSocket，用户ID:', doctorInfo.id)
+      doctorWebSocket.connect(String(doctorInfo.id))
+      
       router.push('/doctor/dashboard')
     } else {
       ElMessage.error(res.msg || '登录失败')

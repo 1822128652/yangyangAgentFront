@@ -7,6 +7,7 @@ import ScheduleView from '@/views/doctor/Components/ScheduleView.vue'
 import AppointmentView from '@/views/doctor/Components/AppointmentView.vue'
 import SettingsView from '@/views/doctor/Components/SettingsView.vue'
 import ScheduleCalendar from '@/views/doctor/Components/ScheduleCalendar.vue' // 10.27 新增
+import DoctorChatView from '@/views/doctor/components/DoctorChatView.vue' // 11.3 新增
 
 const routes = [
   { path: '/', component: ChatWindow },
@@ -19,7 +20,8 @@ const routes = [
       { path: 'schedule', component: ScheduleView },
       { path: 'appointments', component: AppointmentView },
       { path: 'calendar', component: ScheduleCalendar }, // 10.29 新增
-      { path: 'settings', component: SettingsView }
+      { path: 'settings', component: SettingsView },
+      { path: 'chat', component: DoctorChatView, meta: { keepAlive: true } } // 11.6 update
     ]
   }
 ]
